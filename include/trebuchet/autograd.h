@@ -10,15 +10,18 @@ void backward_mul(Tensor *C);
 void backward_matmul(Tensor *C);
 void backward_transpose(Tensor *C);
 
+// Linear combination gradient
+void backward_linear(Tensor *Z);
+
 // Activation function gradients
-void backward_relu(Tensor *C);
-void backward_sigmoid(Tensor *C);
-void backward_tanh(Tensor *C);
-void backward_softmax(Tensor *C);
+void backward_relu(Tensor *A);
+void backward_sigmoid(Tensor *A);
+void backward_tanh(Tensor *A);
+void backward_softmax(Tensor *A);
 
 // Loss function gradients
-void backward_mse(Tensor *C);
-void backward_cross_entropy(Tensor *C);
-void backward_binary_cross_entropy(Tensor *C);
+void backward_mse(Tensor *L);
+void backward_cross_entropy(Tensor *L);
+void backward_binary_cross_entropy(Tensor *L);
 
 #endif

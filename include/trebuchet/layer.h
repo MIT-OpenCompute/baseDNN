@@ -12,6 +12,22 @@ typedef enum {
     LAYER_SOFTMAX
 } LayerType; 
 
+typedef struct {
+    LayerType type; 
+    union {
+        struct {
+            size_t in_features; 
+            size_t out_features; 
+        } linear;
+    } params; 
+} LayerConfig;
+
+#define LINEAR(in_features, out_features) (LayerConfig){ .type = LAYER_LINEAR, .params.linear = { in_features, out_features } }
+#define RELU() (LayerConfig){ .type = LAYER_RELU }
+#define SIGMOID() (LayerConfig){ .type = LAYER_SIGMOID }
+#define TANH() (LayerConfig){ .type = LAYER_TANH }
+#define SOFTMAX() (LayerConfig){ .type = LAYER_SOFTMAX }
+
 typedef struct Layer Layer;
 
 struct Layer {
@@ -25,20 +41,9 @@ struct Layer {
     void (*free)(Layer *self);
 }; 
 
-typedef struct {
-    Layer base;
-    size_t in_features;
-    size_t out_features;
-} LinearLayer; 
-
 // Layer constructors/destructor
-Layer* layer_linear_create(size_t in_features, size_t out_features);
-Layer* layer_relu_create();
-Layer* layer_sigmoid_create();
-Layer* layer_tanh_create();
-Layer* layer_softmax_create();
+Layer* layer_create(LayerConfig config);
 void layer_free(Layer *layer); 
-
 
 // Layer operations
 Tensor* layer_forward(Layer *layer, Tensor *input);

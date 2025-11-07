@@ -4,6 +4,19 @@
 #include <math.h>
 
 // Helper functions for gradient updates
+static void grad_update_three_vars(Tensor *W, Tensor *X, Tensor *b, Tensor *Z, float (*func)(float, float), OpType op_type, void (*backward_fn)(Tensor *)) {
+    if (W->requires_grad || X->requires_grad || b->requires_grad) {
+        Z->requires_grad = 1;
+        Z->op = op_type;
+        Z->num_inputs = 3;
+        Z->inputs = (Tensor **)malloc(3 * sizeof(Tensor *));
+        Z->inputs[0] = W;
+        Z->inputs[1] = X;
+        Z->inputs[2] = b;
+        Z->backward_fn = backward_fn;
+    }
+}
+
 static void grad_update_two_vars(Tensor *A, Tensor *B, Tensor *C, float (*func)(float, float), OpType op_type, void (*backward_fn)(Tensor *)) {
     if (A->requires_grad || B->requires_grad) {
         C->requires_grad = 1;
@@ -114,76 +127,102 @@ Tensor* tensor_transpose(Tensor *A) {
     return C; 
 }
 
+// Linear combination
+Tensor* tensor_linear(Tensor *X, Tensor *W, Tensor *b) {
+    if (!X || !W || !b) return NULL; 
+    if (X->ndim != 2 || W->ndim != 2 || b->ndim != 1) return NULL; 
+    if (X->shape[1] != W->shape[0]) return NULL; 
+    if (W->shape[1] != b->shape[0]) return NULL; 
+
+    size_t Z_shape[2] = {X->shape[0], W->shape[1]};
+    Tensor *Z = tensor_create(Z_shape, 2);
+    if (!Z) return NULL; 
+
+    for (size_t i = 0; i < X->shape[0]; i++) {
+        for (size_t j = 0; j < W->shape[1]; j++) {
+            float acc = 0.0f;
+            for (size_t k = 0; k < X->shape[1]; k++) {
+                acc += X->data[i * X->shape[1] + k] * W->data[k * W->shape[1] + j];
+            }
+            Z->data[i * Z->shape[1] + j] = acc + b->data[j];
+        }
+    }
+
+    grad_update_three_vars(W, X, b, Z, NULL, OP_LINEAR, backward_linear);
+
+    return Z;
+}
+
 // Activation functions
-Tensor* tensor_relu(Tensor *A) {
+Tensor* tensor_relu(Tensor *Z) {
+    if (!Z) return NULL;
+
+    Tensor *A = tensor_create(Z->shape, Z->ndim); 
+    if (!A) return NULL; 
+
+    for (size_t i = 0; i < Z->size; i++) {
+        A->data[i] = Z->data[i] > 0.0f ? Z->data[i] : 0.0f; 
+    }
+
+    grad_update_one_var(Z, A, NULL, OP_RELU, backward_relu);
+
+    return A; 
+}
+
+Tensor* tensor_sigmoid(Tensor *Z) {
+    if (!Z) return NULL; 
+
+    Tensor *A = tensor_create(Z->shape, Z->ndim);
     if (!A) return NULL;
 
-    Tensor *C = tensor_create(A->shape, A->ndim); 
-    if (!C) return NULL; 
-
-    for (size_t i = 0; i < A->size; i++) {
-        C->data[i] = A->data[i] > 0.0f ? A->data[i] : 0.0f; 
+    for (size_t i = 0; i < Z->size; i++) {
+        A->data[i] = 1.0f / (1.0f + expf(-Z->data[i])); 
     }
 
-    grad_update_one_var(A, C, NULL, OP_RELU, backward_relu);
+    grad_update_one_var(Z, A, NULL, OP_SIGMOID, backward_sigmoid);
 
-    return C; 
+    return A;
 }
 
-Tensor* tensor_sigmoid(Tensor *A) {
-    if (!A) return NULL; 
+Tensor* tensor_tanh(Tensor *Z) {
+    if (!Z) return NULL; 
 
-    Tensor *C = tensor_create(A->shape, A->ndim);
-    if (!C) return NULL;
+    Tensor *A = tensor_create(Z->shape, Z->ndim);
+    if (!A) return NULL;
 
-    for (size_t i = 0; i < A->size; i++) {
-        C->data[i] = 1.0f / (1.0f + expf(-A->data[i])); 
+    for (size_t i = 0; i < Z->size; i++) {
+        A->data[i] = tanhf(Z->data[i]); 
     }
 
-    grad_update_one_var(A, C, NULL, OP_SIGMOID, backward_sigmoid);
+    grad_update_one_var(Z, A, NULL, OP_TANH, backward_tanh);
 
-    return C;
+    return A;
 }
 
-Tensor* tensor_tanh(Tensor *A) {
-    if (!A) return NULL; 
-
-    Tensor *C = tensor_create(A->shape, A->ndim);
-    if (!C) return NULL;
-
-    for (size_t i = 0; i < A->size; i++) {
-        C->data[i] = tanhf(A->data[i]); 
-    }
-
-    grad_update_one_var(A, C, NULL, OP_TANH, backward_tanh);
-
-    return C;
-}
-
-Tensor* tensor_softmax(Tensor *A) {
-    if (!A) return NULL; 
+Tensor* tensor_softmax(Tensor *Z) {
+    if (!Z) return NULL; 
     
-    Tensor *C = tensor_create(A->shape, A->ndim);
-    if (!C) return NULL; 
+    Tensor *A = tensor_create(Z->shape, Z->ndim);
+    if (!A) return NULL; 
 
-    float max_val = A->data[0]; 
-    for (size_t i = 1; i < A->size; i++) {
-        if (A->data[i] > max_val) max_val = A->data[i];
+    float max_val = Z->data[0]; 
+    for (size_t i = 1; i < Z->size; i++) {
+        if (Z->data[i] > max_val) max_val = Z->data[i];
     }
 
     float sum = 0.0f; 
-    for (size_t i = 0; i < A->size; i++) {
-        C->data[i] = expf(A->data[i] - max_val);
-        sum += C->data[i];
+    for (size_t i = 0; i < Z->size; i++) {
+        A->data[i] = expf(Z->data[i] - max_val);
+        sum += A->data[i];
     }
 
-    for (size_t i = 0; i < A->size; i++) {
-        C->data[i] /= sum; 
+    for (size_t i = 0; i < Z->size; i++) {
+        A->data[i] /= sum; 
     }
 
-    grad_update_one_var(A, C, NULL, OP_SOFTMAX, backward_softmax);
+    grad_update_one_var(Z, A, NULL, OP_SOFTMAX, backward_softmax);
 
-    return C;
+    return A;
 }
 
 // Loss functions

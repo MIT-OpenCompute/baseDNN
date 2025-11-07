@@ -11,10 +11,13 @@ Tensor* tensor_matmul(Tensor *A, Tensor *B);
 Tensor* tensor_transpose(Tensor *A);
 
 // Activation functions
-Tensor* tensor_relu(Tensor *A);
-Tensor* tensor_sigmoid(Tensor *A);
-Tensor* tensor_tanh(Tensor *A);
-Tensor* tensor_softmax(Tensor *A);
+Tensor* tensor_relu(Tensor *Z);
+Tensor* tensor_sigmoid(Tensor *Z);
+Tensor* tensor_tanh(Tensor *Z);
+Tensor* tensor_softmax(Tensor *Z);
+
+// Linear combination
+Tensor* tensor_linear(Tensor *X, Tensor *W, Tensor *b);
 
 // Loss functions
 Tensor* tensor_mse(Tensor *predictions, Tensor *targets);
