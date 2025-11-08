@@ -43,8 +43,7 @@ foreach(test_src ${TEST_SOURCES})
 endforeach()
 
 # Full tests
-# add_executable(xor tests/full/xor.c)
-# target_link_libraries(xor basednn m)
-
+add_executable(xor tests/full/xor.c)
+target_link_libraries(xor basednn m)
 # add_executable(mnist tests/full/mnist.c)
 # target_link_libraries(mnist basednn m)
