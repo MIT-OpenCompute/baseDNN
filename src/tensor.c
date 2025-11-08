@@ -152,6 +152,13 @@ void tensor_zero_grad(Tensor *T) {
     memset(T->grad, 0, T->size * sizeof(float));
 }
 
+void tensor_fill(Tensor *T, float value) {
+    if (!T) return;
+    for (size_t i = 0; i < T->size; i++) {
+        T->data[i] = value;
+    }
+}
+
 void tensor_print(Tensor *T) {
     if (!T) return;
 

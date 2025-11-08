@@ -61,10 +61,11 @@ static float sub_func(float x, float y) { return x - y; }
 static float mul_func(float x, float y) { return x * y; }
 
 Tensor* tensor_add(Tensor *A, Tensor *B) {
+    if (!A || !B) return NULL;
+    
     Tensor *C = tensor_create(A->shape, A->ndim);
     if (!C) return NULL;
 
-    // temporary solution, should probably add broadcasting support for other operations too
     if (A->ndim == 2 && B->ndim == 1 && A->shape[1] == B->shape[0]) {
         Tensor *C = tensor_create(A->shape, A->ndim);
         if (!C) return NULL;
@@ -84,6 +85,8 @@ Tensor* tensor_add(Tensor *A, Tensor *B) {
 }
 
 Tensor* tensor_sub(Tensor *A, Tensor *B) {
+    if (!A || !B) return NULL;
+    
     Tensor *C = tensor_create(A->shape, A->ndim);
     if (!C) return NULL;
 
@@ -92,6 +95,8 @@ Tensor* tensor_sub(Tensor *A, Tensor *B) {
 }
 
 Tensor* tensor_mul(Tensor *A, Tensor *B) {
+    if (!A || !B) return NULL;
+    
     Tensor *C = tensor_create(A->shape, A->ndim);
     if (!C) return NULL;
 
@@ -244,19 +249,26 @@ Tensor* tensor_softmax(Tensor *Z) {
     Tensor *A = tensor_create(Z->shape, Z->ndim);
     if (!A) return NULL; 
 
-    float max_val = Z->data[0]; 
-    for (size_t i = 1; i < Z->size; i++) {
-        if (Z->data[i] > max_val) max_val = Z->data[i];
-    }
+    size_t batch_size = (Z->ndim == 2) ? Z->shape[0] : 1;
+    size_t num_classes = (Z->ndim == 2) ? Z->shape[1] : Z->size;
 
-    float sum = 0.0f; 
-    for (size_t i = 0; i < Z->size; i++) {
-        A->data[i] = expf(Z->data[i] - max_val);
-        sum += A->data[i];
-    }
+    for (size_t b = 0; b < batch_size; b++) {
+        size_t offset = b * num_classes;
+        
+        float max_val = Z->data[offset];
+        for (size_t i = 1; i < num_classes; i++) {
+            if (Z->data[offset + i] > max_val) max_val = Z->data[offset + i];
+        }
 
-    for (size_t i = 0; i < Z->size; i++) {
-        A->data[i] /= sum; 
+        float sum = 0.0f;
+        for (size_t i = 0; i < num_classes; i++) {
+            A->data[offset + i] = expf(Z->data[offset + i] - max_val);
+            sum += A->data[offset + i];
+        }
+
+        for (size_t i = 0; i < num_classes; i++) {
+            A->data[offset + i] /= sum;
+        }
     }
 
     grad_update_one_var(Z, A, NULL, OP_SOFTMAX, backward_softmax);
@@ -286,6 +298,17 @@ Tensor* tensor_mse(Tensor *predictions, Tensor *targets) {
         sum_sq_error += diff * diff;
     }
     loss->data[0] = sum_sq_error / predictions->size;
+    
+    if (predictions->requires_grad || targets->requires_grad) {
+        loss->requires_grad = 1;
+        loss->op = OP_MSE;
+        loss->num_inputs = 2;
+        loss->inputs = (Tensor **)malloc(2 * sizeof(Tensor *));
+        loss->inputs[0] = predictions;
+        loss->inputs[1] = targets;
+        loss->backward_fn = backward_mse;
+    }
+    
     return loss;
 }
 
@@ -295,33 +318,57 @@ Tensor* tensor_cross_entropy(Tensor *predictions, Tensor *targets) {
     Tensor *loss = tensor_create((size_t[]){1}, 1);
     if (!loss) return NULL;
 
-    float sum_ce_loss = 0.0f; 
+    float sum_ce_loss = 0.0f;
+    float epsilon = 1e-7f;
     for (size_t i = 0; i < predictions->size; i++) {
         float pred = predictions->data[i];
-        float target = targets->data[i]; 
-        sum_ce_loss += -target * logf(pred > 0.0f ? pred : 0.0f);
+        float target = targets->data[i];
+        pred = pred < epsilon ? epsilon : (pred > 1.0f - epsilon ? 1.0f - epsilon : pred);
+        sum_ce_loss += -target * logf(pred);
     }
-    loss->data[0] = sum_ce_loss / predictions->size; 
+    loss->data[0] = sum_ce_loss / predictions->size;
+    
+    if (predictions->requires_grad || targets->requires_grad) {
+        loss->requires_grad = 1;
+        loss->op = OP_CROSS_ENTROPY;
+        loss->num_inputs = 2;
+        loss->inputs = (Tensor **)malloc(2 * sizeof(Tensor *));
+        loss->inputs[0] = predictions;
+        loss->inputs[1] = targets;
+        loss->backward_fn = backward_cross_entropy;
+    }
+    
     return loss;
 }
 
 Tensor* tensor_binary_cross_entropy(Tensor *predictions, Tensor *targets) {
-    if (!check_pred_target(predictions, targets)) return NULL; 
+    if (!check_pred_target(predictions, targets)) return NULL;
     
     Tensor *loss = tensor_create((size_t[]){1}, 1);
     if (!loss) return NULL;
 
-    float sum_bce_loss = 0.0f; 
+    float sum_bce_loss = 0.0f;
+    float epsilon = 1e-7f;
     for (size_t i = 0; i < predictions->size; i++) {
         float pred = predictions->data[i];
-        float target = targets->data[i]; 
-        sum_bce_loss += - (target * logf(pred > 0.0f ? pred : 0.0f) + (1.0f - target) * logf((1.0f - pred) > 0.0f ? (1.0f - pred) : 0.0f));
+        float target = targets->data[i];
+        pred = pred < epsilon ? epsilon : (pred > 1.0f - epsilon ? 1.0f - epsilon : pred);
+        sum_bce_loss += -target * logf(pred) - (1.0f - target) * logf(1.0f - pred);
     }
-    loss->data[0] = sum_bce_loss / predictions->size; 
+    loss->data[0] = sum_bce_loss / predictions->size;
+    
+    if (predictions->requires_grad || targets->requires_grad) {
+        loss->requires_grad = 1;
+        loss->op = OP_BINARY_CROSS_ENTROPY;
+        loss->num_inputs = 2;
+        loss->inputs = (Tensor **)malloc(2 * sizeof(Tensor *));
+        loss->inputs[0] = predictions;
+        loss->inputs[1] = targets;
+        loss->backward_fn = backward_binary_cross_entropy;
+    }
+    
     return loss;
-}
-
-Tensor* tensor_slice(Tensor *input, size_t start, size_t end) {
+}Tensor* tensor_slice(Tensor *input, size_t start, size_t end) {
     if (!input || start >= end || end > input->size) return NULL; 
 
     Tensor *slice = (Tensor*)malloc(sizeof(Tensor));

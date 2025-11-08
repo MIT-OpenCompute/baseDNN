@@ -50,6 +50,7 @@ void tensor_zero_grad(Tensor *T);
 void tensor_backward(Tensor *T);
 
 // Utilities
+void tensor_fill(Tensor *T, float value);
 void tensor_print(Tensor *T);
 Tensor* tensor_copy(Tensor *T);
 

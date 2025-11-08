@@ -5,6 +5,12 @@
 #include "layer.h"
 #include "optimizer.h"
 
+typedef enum {
+    LOSS_MSE,
+    LOSS_CROSS_ENTROPY,
+    LOSS_BINARY_CROSS_ENTROPY
+} LossType;
+
 typedef struct Network Network;
 
 struct Network {
@@ -24,7 +30,8 @@ void network_free(Network *net);
 Tensor* network_forward(Network *net, Tensor *input);
 
 // Training
-void network_train(Network *net, Optimizer *opt, Tensor *inputs, Tensor *targets, size_t epochs, size_t batch_size, int verbose);
+void network_train(Network *net, Optimizer *opt, Tensor *inputs, Tensor *targets, size_t epochs, size_t batch_size, LossType loss_type, int verbose);
+float network_train_step(Network *net, Tensor *input, Tensor *target, Optimizer *opt, LossType loss_type);
 void network_zero_grad(Network *net);
 
 // Utilities

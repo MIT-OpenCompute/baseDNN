@@ -42,14 +42,9 @@ foreach(test_src ${TEST_SOURCES})
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()
 
-# Optional: Create a single test runner that runs all tests
-add_executable(run_all_tests 
-    tests/unit/test_tensor.c
-    tests/unit/test_ops.c
-    tests/unit/test_autograd.c
-    tests/unit/test_layer.c
-    tests/unit/test_network.c
-    tests/unit/test_optimizer.c
-)
-target_link_libraries(run_all_tests basednn m)
-add_test(NAME run_all_tests COMMAND run_all_tests)
+# Full integration tests
+add_executable(xor tests/full/xor.c)
+target_link_libraries(xor basednn m)
+
+add_executable(mnist tests/full/mnist.c)
+target_link_libraries(mnist basednn m)

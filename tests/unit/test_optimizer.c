@@ -241,8 +241,9 @@ TEST(optimizer_adam_bias_correction) {
     float after_100th = layer->weights->data[0];
     float later_change = fabsf(after_100th - before_100th);
     
-    // First step change should be larger due to bias correction
-    assert(first_change > later_change);
+    // With constant gradients, Adam should give consistent step sizes
+    // Bias correction prevents initial steps from being too small
+    assert(fabsf(first_change - later_change) < 0.0001f);
     
     optimizer_free(opt);
     network_free(net);
@@ -524,7 +525,9 @@ TEST(optimizer_convergence_test) {
     
     // Simulate converging to zero
     for (int i = 0; i < 100; i++) {
-        layer->weights->grad = (float*)calloc(layer->weights->size, sizeof(float));
+        if (!layer->weights->grad) {
+            layer->weights->grad = (float*)calloc(layer->weights->size, sizeof(float));
+        }
         
         // Gradient points towards zero
         for (size_t j = 0; j < layer->weights->size; j++) {
@@ -532,8 +535,6 @@ TEST(optimizer_convergence_test) {
         }
         
         optimizer_step(opt);
-        
-        free(layer->weights->grad);
     }
     
     // Should be close to zero

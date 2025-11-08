@@ -1,8 +1,11 @@
 #include "basednn/autograd.h"
 #include <stdlib.h>
+#include <math.h>
 
 // Tensor function gradients
 void backward_add(Tensor *C) {
+    if (!C || !C->inputs || C->num_inputs < 2) return;
+    
     Tensor *A = C->inputs[0];
     Tensor *B = C->inputs[1];
     
@@ -32,6 +35,8 @@ void backward_add(Tensor *C) {
 }
 
 void backward_sub(Tensor *C) {
+    if (!C || !C->inputs || C->num_inputs < 2) return;
+    
     Tensor *A = C->inputs[0];
     Tensor *B = C->inputs[1];
     
@@ -51,6 +56,8 @@ void backward_sub(Tensor *C) {
 }
 
 void backward_mul(Tensor *C) {
+    if (!C || !C->inputs || C->num_inputs < 2) return;
+    
     Tensor *A = C->inputs[0];
     Tensor *B = C->inputs[1];
     
@@ -77,11 +84,13 @@ void backward_matmul(Tensor *output) {
     
     if (A->ndim == 1 && B->ndim == 1) {
         if (A->requires_grad) {
+            if (!A->grad) A->grad = (float *)calloc(A->size, sizeof(float));
             for (size_t i = 0; i < A->size; i++) {
                 A->grad[i] += output->grad[0] * B->data[i];
             }
         }
         if (B->requires_grad) {
+            if (!B->grad) B->grad = (float *)calloc(B->size, sizeof(float));
             for (size_t i = 0; i < B->size; i++) {
                 B->grad[i] += output->grad[0] * A->data[i];
             }
@@ -90,6 +99,7 @@ void backward_matmul(Tensor *output) {
     
     else if (A->ndim == 2 && B->ndim == 1) {
         if (A->requires_grad) {
+            if (!A->grad) A->grad = (float *)calloc(A->size, sizeof(float));
             for (size_t i = 0; i < A->shape[0]; i++) {
                 for (size_t j = 0; j < A->shape[1]; j++) {
                     A->grad[i * A->shape[1] + j] += output->grad[i] * B->data[j];
@@ -97,6 +107,7 @@ void backward_matmul(Tensor *output) {
             }
         }
         if (B->requires_grad) {
+            if (!B->grad) B->grad = (float *)calloc(B->size, sizeof(float));
             for (size_t j = 0; j < B->shape[0]; j++) {
                 float acc = 0.0f;
                 for (size_t i = 0; i < A->shape[0]; i++) {
@@ -109,6 +120,7 @@ void backward_matmul(Tensor *output) {
     
     else if (A->ndim == 1 && B->ndim == 2) {
         if (A->requires_grad) {
+            if (!A->grad) A->grad = (float *)calloc(A->size, sizeof(float));
             for (size_t i = 0; i < A->shape[0]; i++) {
                 float acc = 0.0f;
                 for (size_t j = 0; j < B->shape[1]; j++) {
@@ -118,6 +130,7 @@ void backward_matmul(Tensor *output) {
             }
         }
         if (B->requires_grad) {
+            if (!B->grad) B->grad = (float *)calloc(B->size, sizeof(float));
             for (size_t i = 0; i < B->shape[0]; i++) {
                 for (size_t j = 0; j < B->shape[1]; j++) {
                     B->grad[i * B->shape[1] + j] += A->data[i] * output->grad[j];
@@ -128,6 +141,7 @@ void backward_matmul(Tensor *output) {
     
     else if (A->ndim == 2 && B->ndim == 2) {
         if (A->requires_grad) {
+            if (!A->grad) A->grad = (float *)calloc(A->size, sizeof(float));
             for (size_t i = 0; i < A->shape[0]; i++) {
                 for (size_t j = 0; j < A->shape[1]; j++) {
                     float acc = 0.0f;
@@ -139,6 +153,7 @@ void backward_matmul(Tensor *output) {
             }
         }
         if (B->requires_grad) {
+            if (!B->grad) B->grad = (float *)calloc(B->size, sizeof(float));
             for (size_t i = 0; i < B->shape[0]; i++) {
                 for (size_t j = 0; j < B->shape[1]; j++) {
                     float acc = 0.0f;
@@ -246,10 +261,17 @@ void backward_softmax(Tensor *A) {
     
     if (Z->requires_grad) {
         if (!Z->grad) Z->grad = (float *)calloc(Z->size, sizeof(float));
-        for (size_t i = 0; i < Z->size; i++) {
-            for (size_t j = 0; j < Z->size; j++) {
-                float delta = (i == j) ? 1.0f : 0.0f;
-                Z->grad[i] += A->grad[j] * A->data[j] * (delta - A->data[i]);
+        
+        size_t batch_size = (Z->ndim == 2) ? Z->shape[0] : 1;
+        size_t num_classes = (Z->ndim == 2) ? Z->shape[1] : Z->size;
+
+        for (size_t b = 0; b < batch_size; b++) {
+            size_t offset = b * num_classes;
+            for (size_t i = 0; i < num_classes; i++) {
+                for (size_t j = 0; j < num_classes; j++) {
+                    float delta = (i == j) ? 1.0f : 0.0f;
+                    Z->grad[offset + i] += A->grad[offset + j] * A->data[offset + j] * (delta - A->data[offset + i]);
+                }
             }
         }
     }
@@ -282,13 +304,16 @@ void backward_mse(Tensor *L) {
 void backward_cross_entropy(Tensor *L) {
     Tensor *predictions = L->inputs[0];
     Tensor *targets = L->inputs[1]; 
+    float epsilon = 1e-7f;
 
     if (predictions->requires_grad) {
         if (!predictions->grad) 
             predictions->grad = (float *)calloc(predictions->size, sizeof(float));
         for (size_t i = 0; i < predictions->size; i++) {
+            float pred = predictions->data[i];
+            pred = pred < epsilon ? epsilon : (pred > 1.0f - epsilon ? 1.0f - epsilon : pred);
             predictions->grad[i] += 
-                (-targets->data[i] / predictions->data[i]) * L->grad[0];
+                (-targets->data[i] / pred) * L->grad[0];
         }
     }
 
@@ -296,8 +321,10 @@ void backward_cross_entropy(Tensor *L) {
         if (!targets->grad) 
             targets->grad = (float *)calloc(targets->size, sizeof(float));
         for (size_t i = 0; i < targets->size; i++) {
+            float pred = predictions->data[i];
+            pred = pred < epsilon ? epsilon : pred;
             targets->grad[i] -= 
-                ( -logf(predictions->data[i]) ) * L->grad[0];
+                ( -logf(pred) ) * L->grad[0];
         }
     }
 }
@@ -305,14 +332,17 @@ void backward_cross_entropy(Tensor *L) {
 void backward_binary_cross_entropy(Tensor *L) {
     Tensor *predictions = L->inputs[0];
     Tensor *targets = L->inputs[1]; 
+    float epsilon = 1e-7f;
 
     if (predictions->requires_grad) {
         if (!predictions->grad) 
             predictions->grad = (float *)calloc(predictions->size, sizeof(float));
         for (size_t i = 0; i < predictions->size; i++) {
+            float pred = predictions->data[i];
+            pred = pred < epsilon ? epsilon : (pred > 1.0f - epsilon ? 1.0f - epsilon : pred);
             predictions->grad[i] += 
-                (-(targets->data[i] / predictions->data[i]) + 
-                 (1.0f - targets->data[i]) / (1.0f - predictions->data[i])) * L->grad[0];
+                (-(targets->data[i] / pred) + 
+                 (1.0f - targets->data[i]) / (1.0f - pred)) * L->grad[0];
         }
     }
 
@@ -320,9 +350,10 @@ void backward_binary_cross_entropy(Tensor *L) {
         if (!targets->grad) 
             targets->grad = (float *)calloc(targets->size, sizeof(float));
         for (size_t i = 0; i < targets->size; i++) {
+            float pred = predictions->data[i];
+            pred = pred < epsilon ? epsilon : (pred > 1.0f - epsilon ? 1.0f - epsilon : pred);
             targets->grad[i] -= 
-                (-logf(predictions->data[i]) + 
-                 -logf(1.0f - predictions->data[i])) * L->grad[0];
+                (-logf(pred) + -logf(1.0f - pred)) * L->grad[0];
         }
     }
 }

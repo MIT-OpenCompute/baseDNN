@@ -30,6 +30,12 @@ void network_add_layer(Network *net, Layer *layer) {
 
     net->layers[net->num_layers++] = layer;
 
+    if (layer->num_parameters > 0) {
+        for (size_t i = 0; i < layer->num_parameters; i++) {
+            tensor_set_requires_grad(layer->parameters[i], 1);
+        }
+    }
+
     if (net->parameters) {
         free(net->parameters); 
     }
@@ -44,7 +50,7 @@ void network_free(Network *net) {
     }
 
     free(net->layers);
-    if (!!net->parameters) {
+    if (net->parameters) {
         free(net->parameters);
     }
     free(net);
@@ -58,10 +64,6 @@ Tensor* network_forward(Network *net, Tensor *input) {
 
     for (size_t i = 0; i < net->num_layers; i++) {
         Tensor *new_output = layer_forward(net->layers[i], output); 
-
-        if (output != input && i > 0) {
-            tensor_free(output); 
-        }
         output = new_output;
     }
 
@@ -69,7 +71,7 @@ Tensor* network_forward(Network *net, Tensor *input) {
 }
 
 // Training
-void network_train(Network *net, Optimizer *opt,  Tensor *input, Tensor *target, size_t epochs, size_t batch_size, int verbose) {
+void network_train(Network *net, Optimizer *opt,  Tensor *input, Tensor *target, size_t epochs, size_t batch_size, LossType loss_type, int verbose) {
     if (!net || !opt || !input || !target) return; 
 
     size_t num_samples = input->shape[0]; 
@@ -98,7 +100,24 @@ void network_train(Network *net, Optimizer *opt,  Tensor *input, Tensor *target,
                 continue; 
             }
 
-            Tensor *loss_tensor = tensor_mse(predictions, batch_target);
+            Tensor *loss_tensor = NULL;
+            switch (loss_type) {
+                case LOSS_MSE:
+                    loss_tensor = tensor_mse(predictions, batch_target);
+                    break;
+                case LOSS_CROSS_ENTROPY:
+                    loss_tensor = tensor_cross_entropy(predictions, batch_target);
+                    break;
+                case LOSS_BINARY_CROSS_ENTROPY:
+                    loss_tensor = tensor_binary_cross_entropy(predictions, batch_target);
+                    break;
+                default:
+                    tensor_free(batch_input);
+                    tensor_free(batch_target);
+                    tensor_free(predictions);
+                    continue;
+            }
+
             if (loss_tensor) {
                 float loss = loss_tensor->data[0]; 
                 total_loss += loss;
@@ -116,10 +135,47 @@ void network_train(Network *net, Optimizer *opt,  Tensor *input, Tensor *target,
             tensor_free(predictions);
         }
 
-        if (verbose && (epoch % 10 == 0 || epoch == epochs - 1)) {
-            printf("Epoch %zu/%zu, Loss: %.6f\n", epoch + 1, epochs, total_loss / num_batches);
-        }
+        if (verbose) printf("Epoch %zu/%zu, Loss: %.6f\n", epoch + 1, epochs, total_loss / num_batches);
     }
+}
+
+float network_train_step(Network *net, Tensor *input, Tensor *target, Optimizer *opt, LossType loss_type) {
+    if (!net || !opt || !input || !target) return 0.0f;
+
+    Tensor *predictions = network_forward(net, input);
+    if (!predictions) return 0.0f;
+
+    Tensor *loss_tensor = NULL;
+    switch (loss_type) {
+        case LOSS_MSE:
+            loss_tensor = tensor_mse(predictions, target);
+            break;
+        case LOSS_CROSS_ENTROPY:
+            loss_tensor = tensor_cross_entropy(predictions, target);
+            break;
+        case LOSS_BINARY_CROSS_ENTROPY:
+            loss_tensor = tensor_binary_cross_entropy(predictions, target);
+            break;
+        default:
+            tensor_free(predictions);
+            return 0.0f;
+    }
+
+    if (!loss_tensor) {
+        tensor_free(predictions);
+        return 0.0f;
+    }
+
+    float loss = loss_tensor->data[0];
+    
+    network_zero_grad(net);
+    tensor_backward(loss_tensor);
+    optimizer_step(opt);
+
+    tensor_free(loss_tensor);
+    tensor_free(predictions);
+
+    return loss;
 }
 
 void network_zero_grad(Network *net) {
@@ -131,17 +187,36 @@ void network_zero_grad(Network *net) {
 }
 
 // Utilities
-void network_print(Network *net, int verbose) {
+void network_print(Network *net) {
     if (!net) return; 
 
     printf("Network:\n");
     printf("Number of layers: %zu\n", net->num_layers);
     printf("Number of parameters: %zu\n", net->num_parameters);
 
-    if (verbose) {
-        for (size_t i = 0; i < net->num_layers; i++) {
-            printf("Layer %zu:\n", i + 1);
-            layer_print(net->layers[i]);
+    for (size_t i = 0; i < net->num_layers; i++) {
+        Layer *layer = net->layers[i];
+        printf("  Layer %zu: ", i + 1);
+        
+        switch (layer->type) {
+            case LAYER_LINEAR:
+                printf("Linear(%zu, %zu)\n", 
+                       layer->weights->shape[0], layer->weights->shape[1]);
+                break;
+            case LAYER_RELU:
+                printf("ReLU()\n");
+                break;
+            case LAYER_SIGMOID:
+                printf("Sigmoid()\n");
+                break;
+            case LAYER_TANH:
+                printf("Tanh()\n");
+                break;
+            case LAYER_SOFTMAX:
+                printf("Softmax()\n");
+                break;
+            default:
+                printf("Unknown\n");
         }
     }
 }
@@ -177,10 +252,6 @@ Tensor** network_get_parameters(Network *net, size_t *num_params) {
 
         for (size_t j = 0; j < count; j++) {
             params[idx++] = layer_params[j]; 
-        }
-
-        if (layer_params) {
-            free(layer_params); 
         }
     }
 

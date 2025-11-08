@@ -1,5 +1,6 @@
 #include "basednn/layer.h"
 #include <stdlib.h>
+#include <math.h>
 
 // Forward forward (lol) declarations
 static Tensor* linear_forward(Layer *self, Tensor *input); 
@@ -22,8 +23,12 @@ Layer* layer_create(LayerConfig config) {
             size_t in_features = config.params.linear.in_features;
             size_t out_features = config.params.linear.out_features; 
 
-            layer->weights = tensor_randn(2, (size_t[]){in_features, out_features}, 42);
-            layer->bias = tensor_zeroes(1, (size_t[]){out_features});
+            layer->weights = tensor_randn((size_t[]){in_features, out_features}, 2, 42);
+            float scale = sqrtf(2.0f / (float)in_features);
+            for (size_t i = 0; i < layer->weights->size; i++) {
+                layer->weights->data[i] *= scale;
+            }
+            layer->bias = tensor_zeroes((size_t[]){out_features}, 1);
 
             layer->parameters = malloc(2 * sizeof(Tensor*));
             layer->parameters[0] = layer->weights;
@@ -57,6 +62,7 @@ void layer_free(Layer *layer) {
     if (layer->weights) tensor_free(layer->weights);
     if (layer->bias) tensor_free(layer->bias);
     if (layer->output) tensor_free(layer->output);
+    if (layer->parameters) free(layer->parameters);
 
     free(layer);
 }
