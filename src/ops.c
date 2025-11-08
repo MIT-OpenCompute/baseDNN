@@ -320,3 +320,45 @@ Tensor* tensor_binary_cross_entropy(Tensor *predictions, Tensor *targets) {
     loss->data[0] = sum_bce_loss / predictions->size; 
     return loss;
 }
+
+Tensor* tensor_slice(Tensor *input, size_t start, size_t end) {
+    if (!input || start >= end || end > input->size) return NULL; 
+
+    Tensor *slice = (Tensor*)malloc(sizeof(Tensor));
+    if (!slice) return NULL;
+
+    slice->ndim = input->ndim; 
+    slice->shape = (size_t*)malloc(input->ndim * sizeof(size_t));
+    if (!slice->shape) {
+        free(slice);
+        return NULL;
+    }
+
+    slice->shape[0] = end - start; 
+    size_t stride = 1;
+    for (size_t i = 1; i < input->ndim; i++) {
+        slice->shape[i] = input->shape[i]; 
+        stride *= input->shape[i]; 
+    }
+
+    slice->size = (end - start) * stride; 
+    slice->data = input->data + (start * stride); 
+
+    if (input->grad) {
+        slice->grad = input->grad + (start * stride); 
+    } else {
+        slice->grad = NULL; 
+    }
+
+    slice->owns_data = 0; 
+    
+    slice->requires_grad = input->requires_grad; 
+
+    slice->op = OP_NONE; 
+    slice->inputs = NULL; 
+    slice->num_inputs = 0; 
+    slice->backward_fn = NULL; 
+    slice->extra_data = NULL; 
+
+    return slice;
+}

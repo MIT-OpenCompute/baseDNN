@@ -34,7 +34,7 @@ static void tensor_scale(Tensor *T, float scale) {
     }
 }
 
-static void tensor_add(Tensor *dst, Tensor *src) {
+static void tensor_add_inplace(Tensor *dst, Tensor *src) {
     if (!dst || !src || !dst->data || !src->data) return; 
     for (size_t i = 0; i < dst->size; i++) {
         dst->data[i] += src->data[i]; 
@@ -43,7 +43,7 @@ static void tensor_add(Tensor *dst, Tensor *src) {
 
 static void tensor_scale_add(Tensor *dst, Tensor *src, float scale) {
     tensor_scale(src, scale);
-    tensor_add(dst, src);
+    tensor_add_inplace(dst, src);
 }
 
 // Optimizer constructor/destuctors
@@ -198,7 +198,7 @@ static void adam_step(Optimizer *opt) {
     }
 }
 
-static void optimizer_zero_grad_impl(Optimizer *opt) {
+void optimizer_zero_grad(Optimizer *opt) {
     if (!opt) return; 
 
     for (size_t i = 0; i < opt->num_parameters; i++) {
@@ -221,6 +221,46 @@ static void sgd_free(Optimizer *opt) {
             free(state->velocity);
         }
         free(state);
+    }
+    free(opt);
+}
+
+static void adam_free(Optimizer *opt) {
+    if (!opt) return; 
+
+    AdamState *state = (AdamState *)opt->state; 
+    if (state) {
+        if (state->m) {
+            for (size_t i = 0; i < opt->num_parameters; i++) {
+                if (state->m[i]) {
+                    tensor_free(state->m[i]);
+                }
+            }
+            free(state->m);
+        }
+        if (state->v) {
+            for (size_t i = 0; i < opt->num_parameters; i++) {
+                if (state->v[i]) {
+                    tensor_free(state->v[i]);
+                }
+            }
+            free(state->v);
+        }
+        free(state); 
+    }
+}
+
+void optimizer_free(Optimizer *opt) {
+    if (!opt) return; 
+
+    if (opt->state) {
+        if (opt->type == OPTIMIZER_SGD) {
+            sgd_free(opt);
+        } else if (opt->type == OPTIMIZER_ADAM) {
+            adam_free(opt);
+        } else {
+            free(opt->state); 
+        }
     }
     free(opt);
 }

@@ -18,13 +18,12 @@ struct Network {
 // Network management
 Network* network_create();
 void network_add_layer(Network *net, Layer *layer);
-void network_remove_last_layer(Network *net);
 void network_free(Network *net);
 
 // Forward pass 
 Tensor* network_forward(Network *net, Tensor *input);
 
-// Train
+// Training
 void network_train(Network *net, Optimizer *opt, Tensor *inputs, Tensor *targets, size_t epochs, size_t batch_size, int verbose);
 void network_zero_grad(Network *net);
 

@@ -109,3 +109,4 @@ Tensor** layer_get_parameters(Layer *layer, size_t *num_params) {
     *num_params = layer->num_parameters;
     return layer->parameters;
 }
+

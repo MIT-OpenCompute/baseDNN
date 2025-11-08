@@ -54,6 +54,7 @@ Tensor* tensor_create(size_t *shape, size_t ndim) {
 
     T->grad = NULL; 
     T->requires_grad = 0;
+    T->owns_data = 1;
     T->op = OP_NONE;
     T->inputs = NULL;
     T->num_inputs = 0;
@@ -95,10 +96,16 @@ Tensor* tensor_randn(size_t *shape, size_t ndim, int seed) {
 
 void tensor_free(Tensor *T) {
     if (!T) return; 
-    if (T->data) free(T->data); 
-    if (T->grad) free(T->grad); 
+
+    if (T->owns_data) {
+        if (T->data) free(T->data); 
+        if (T->grad) free(T->grad); 
+    }
+
     if (T->shape) free(T->shape); 
     if (T->inputs) free(T->inputs); 
+    if (T->extra_data) free(T->extra_data);
+
     free(T); 
 }
 
@@ -186,12 +193,12 @@ Tensor* tensor_copy(Tensor *T) {
 
     T->grad = NULL; 
     T->requires_grad = 0;
+    T->owns_data = 1; 
     T->op = OP_NONE;
     T->inputs = NULL;
     T->num_inputs = 0;
     T->backward_fn = NULL;
     T->extra_data = NULL;
-    return T; 
 
     return C;
 }

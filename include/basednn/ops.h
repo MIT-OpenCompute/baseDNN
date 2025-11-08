@@ -21,4 +21,8 @@ Tensor* tensor_mse(Tensor *predictions, Tensor *targets);
 Tensor* tensor_cross_entropy(Tensor *predictions, Tensor *targets);
 Tensor* tensor_binary_cross_entropy(Tensor *predictions, Tensor *targets);
 
+// Utilities
+Tensor* tensor_slice(Tensor *input, size_t start, size_t end); 
+
+
 #endif

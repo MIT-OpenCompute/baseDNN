@@ -29,6 +29,7 @@ struct Tensor {
     size_t size;
     
     int requires_grad;
+    int owns_data;
     OpType op;
     Tensor **inputs;
     size_t num_inputs;
