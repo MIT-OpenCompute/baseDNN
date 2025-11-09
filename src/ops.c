@@ -1,5 +1,5 @@
-#include "lessbasednn/ops.h"
-#include "lessbasednn/autograd.h"
+#include "basednn/ops.h"
+#include "basednn/autograd.h"
 #include <stdlib.h>
 #include <math.h>
 

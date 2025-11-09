@@ -45,5 +45,5 @@ endforeach()
 # Full tests
 add_executable(xor tests/full/xor.c)
 target_link_libraries(xor lessbasednn m)
-# add_executable(mnist tests/full/mnist.c)
-# target_link_libraries(mnist lessbasednn m)
+add_executable(mnist tests/full/mnist.c)
+target_link_libraries(mnist lessbasednn m)

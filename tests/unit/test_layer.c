@@ -3,9 +3,9 @@
  * Tests layer creation, forward pass, parameter management, and different layer types
  */
 
-#include "lessbasednn/layer.h"
-#include "lessbasednn/tensor.h"
-#include "lessbasednn/ops.h"
+#include "basednn/layer.h"
+#include "basednn/tensor.h"
+#include "basednn/ops.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>

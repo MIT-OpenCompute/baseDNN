@@ -1,5 +1,5 @@
-#ifndef LESSBASEDNN_H
-#define LESSBASEDNN_H
+#ifndef BASEDNN_H
+#define BASEDNN_H
 
 #include "tensor.h"
 #include "ops.h"

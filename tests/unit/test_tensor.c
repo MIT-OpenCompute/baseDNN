@@ -3,7 +3,7 @@
  * Tests tensor creation, initialization, autograd, memory management, and utilities
  */
 
-#include "lessbasednn/tensor.h"
+#include "basednn/tensor.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>

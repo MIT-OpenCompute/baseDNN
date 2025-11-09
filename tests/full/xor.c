@@ -1,4 +1,4 @@
-#include "lessbasednn/lessbasednn.h"
+#include "basednn/basednn.h"
 #include <stdio.h>
 
 // ai generated xor test
