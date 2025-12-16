@@ -12,6 +12,7 @@ static inline void basednn_init() {
     registry_init();
 }
 
+
 static inline void basednn_cleanup() {
     registry_cleanup();
 }
